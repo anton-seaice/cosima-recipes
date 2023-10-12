@@ -1,0 +1,45 @@
+
+
+name: Run recipe_python 
+ 
+on:
+  workflow_run:
+    workflows: [ "FIX" ]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  run_recipe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copy to remote
+
+      - name: Run recipe_python
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: gadi.nci.org.au
+          username: ${{secrets.GADI_USER}}
+          key: ${{secrets.DEPLOY_KEY}}
+          command_timeout: 2400m
+          script: |
+            cd ${{secrets.GADI_SCRIPTS_DIR}}/../ESMValTool/jobs
+            qsub launch_recipe_python.pbs
+      - name: Get output log
+        if: ${{ failure() || github.event.workflow_run.name == 'Run all recipes' || ( github.event.workflow_run.name == 'Run all failed' && steps.latest-workflow-status.outputs.result != 'success' ) || github.event_name == 'workflow_dispatch' }}
+        uses: nicklasfrahm/scp-action@main
+        with:
+          direction: download
+          host: gadi.nci.org.au
+          username: ${{secrets.GADI_USER}}
+          insecure_ignore_fingerprint: true
+          key: ${{secrets.DEPLOY_KEY}}
+          source: ${{secrets.GADI_SCRIPTS_DIR}}/../ESMValTool/logs/recipe_python.out
+          target: log.txt
+      - name: Upload log as artifact
+        if: ${{ failure() || github.event.workflow_run.name == 'Run all recipes' || ( github.event.workflow_run.name == 'Run all failed' && steps.latest-workflow-status.outputs.result != 'success' ) || github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: output_log
+          path: log.txt
+      
